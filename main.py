@@ -1,9 +1,14 @@
 import os
+import sys
 from pprint import pprint
 from typing import Union, Any, Sequence, Dict
+
+import influxdb
 import serial
 import logging
 from datetime import datetime
+
+from influxdb import InfluxDBClient
 
 SERIAL_DEVICE = os.environ.get("PORT", "/dev/ttyS0")
 
@@ -108,8 +113,28 @@ class SerialDecoder(object):
 
 if __name__ == "__main__":
     decoder = SerialDecoder()
+    client = influxdb.InfluxDBClient(database="bis")
+    client.create_database("bis")
+
+    try:
+        tag_value = sys.argv[1]
+    except IndexError:
+        tag_value = "default"
+
+
     try:
         while True:
-            pprint(decoder.poll_lines())
+            bis_line = decoder.poll_lines()
+            document = {
+                "time": datetime.utcnow().isoformat("T") + "Z",
+                "measurement": "channel_both",
+                "tags": {
+                    "subject": tag_value,
+                },
+                "fields": bis_line["channel_both"],
+            }
+
+            pprint(bis_line)
+            client.write_points([document])
     except KeyboardInterrupt:
         decoder.close()
